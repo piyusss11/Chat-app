@@ -1,21 +1,63 @@
-import { WebSocket, WebSocketServer } from "ws";
-
+import { WebSocketServer, WebSocket } from "ws";
 const ws = new WebSocketServer({ port: 8080 });
+
+interface IUser {
+  room: string;
+  socket: WebSocket;
+}
+interface IMessage {
+  type: "join" | "message";
+  payload: {
+    roomId: string;
+    name: string;
+    message?: string;
+  };
+}
+
+// const a = { type: "join", payload: { roomId: "123",name:"piyush" } };
 let activeUsers = 0;
-let allUsers: WebSocket[] = [];
+let allUsers: IUser[] = [];
+
 ws.on("connection", (socket) => {
-  allUsers.push(socket);
   activeUsers = activeUsers + 1;
-  console.log("activeUsers connected, No:", activeUsers);
-  socket.on("message", (message) => {
-    allUsers.forEach((e) => {
-      e.send(message.toString());
-    });
+  console.log(`A new user connected. Active users: ${activeUsers}`);
+  socket.on("message", (mesaage: string) => {
+    try {
+      const messageObj: IMessage = JSON.parse(mesaage);
+      const {
+        type,
+        payload: { roomId, name },
+      } = messageObj;
+      if (type === "join") {
+        console.log(`${name} joined room ${roomId}`);
+        allUsers.push({ room: roomId, socket }); // created a room
+      }
+      if (messageObj.type === "message") {
+        console.log(`${name} : ${messageObj.payload.message} ${new Date().toLocaleTimeString()}`);
+        const currentUserRoom = allUsers.find((x) => x.socket == socket)?.room;
+        if (currentUserRoom) {
+          allUsers
+            .filter(
+              (user) => user.room == currentUserRoom && user.socket !== socket
+            )
+            .forEach((user) =>
+              user.socket.send(
+                JSON.stringify({
+                  name,
+                  message: messageObj.payload.message,
+                  timestamp: new Date().toLocaleTimeString(),
+                })
+              )
+            );
+        }
+      }
+    } catch (error) {
+      console.log(error);
+    }
   });
   socket.on("close", () => {
-    activeUsers = activeUsers - 1;
-    console.log("activeUsersdisconnected");
-    allUsers = allUsers.filter((e) => e !== socket);
-    console.log(allUsers.length);
+    activeUsers--;
+    allUsers = allUsers.filter((user) => user.socket !== socket);
+    console.log(`A user disconnected. Active users: ${activeUsers}`);
   });
 });
