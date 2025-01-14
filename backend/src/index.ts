@@ -4,6 +4,7 @@ const ws = new WebSocketServer({ port: 8080 });
 interface IUser {
   room: string;
   socket: WebSocket;
+  name: string;
 }
 interface IMessage {
   type: "join" | "message";
@@ -28,25 +29,41 @@ ws.on("connection", (socket) => {
         type,
         payload: { roomId, name },
       } = messageObj;
+      if (!type || !roomId || !name) {
+        console.error("Invalid message format:", messageObj);
+        return;
+      }
       if (type === "join") {
         console.log(`${name} joined room ${roomId}`);
-        allUsers.push({ room: roomId, socket }); // created a room
+        allUsers.push({ room: roomId, socket, name });
+        // created a room
       }
-      if (messageObj.type === "message") {
-        console.log(`${name} : ${messageObj.payload.message} ${new Date().toLocaleTimeString()}`);
-        const currentUserRoom = allUsers.find((x) => x.socket == socket)?.room;
+      if (type === "message") {
+        console.log(
+          `${name} : ${
+            messageObj.payload.message
+          } ${new Date().toLocaleTimeString()}`
+        );
+        const currentUserRoom = allUsers.find((x) => x.socket === socket)?.room;
         if (currentUserRoom) {
           allUsers
             .filter(
-              (user) => user.room == currentUserRoom && user.socket !== socket
+              (user) => user.room === currentUserRoom && user.socket !== socket
             )
             .forEach((user) =>
               user.socket.send(
                 JSON.stringify({
                   name,
                   message: messageObj.payload.message,
-                  timestamp: new Date().toLocaleTimeString(),
-                })
+                  timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                }),
+                (err) => {
+                  if (err)
+                    console.error(
+                      `Error sending message to ${user.name}:`,
+                      err
+                    );
+                }
               )
             );
         }
@@ -61,3 +78,5 @@ ws.on("connection", (socket) => {
     console.log(`A user disconnected. Active users: ${activeUsers}`);
   });
 });
+
+console.log("WebSocket server running on ws://localhost:8080");
